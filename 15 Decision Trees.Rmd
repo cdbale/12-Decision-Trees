@@ -7,6 +7,15 @@ output:
     css: style.css
 ---
 
+## Key Concepts | From Inference to Prediction
+
+- **Prediction versus inference:** match the model's purpose to the managerial question.
+- **Supervised learning:** use observed outcomes to learn a regression or classification rule.
+- **Feature engineering:** prepare inputs that will also be available when making new predictions.
+- **Fit and evaluate:** learn a rule from training data, then check whether it generalizes.
+
+Today we develop the **engineer** and **fit** stages introduced in lecture 13.
+
 ## Marketing Analytics Process
 
 <center>
@@ -25,14 +34,39 @@ output:
 
 ## Supervised Learning and Prediction
 
-Today, we will be doing *supervised learning* with the goal of *prediction*. So instead of letting our beliefs and hypotheses about our story drive our selection of variables and worrying about whether our coefficient estimates are accurate, we'll need to run a *lot* of models and find which one is best for predicting the outcome we care about.
+Lecture 13 emphasized that models extract information to inform a managerial decision. Wrangling and visualization suggest patterns; a predictive model turns those patterns into a rule we can apply to new observations.
+
+Today we use **supervised learning**: outcomes are known in the training data, and our goal is to predict them for other observations. We compare candidate models by how well their predictions generalize, rather than interpreting regression coefficients as effects.
 
 ## How Do We know Whether We Care About Inference or Prediction?
 
-- If a model is used to make operational decisions? --> *Prediction*.
-- If a model is used to explain behavior or outcomes, or allow us to intervene in a process? --> *Inference*.
+- **Prediction:** which Roomba customers are likely to be shopping for a vacuum, given what we know about them?
+- **Inference:** what relationships help explain shopping behavior, and how uncertain are those estimates?
+- **Causal inference:** would sending a promotion make a customer more likely to buy?
 
-What are some examples of prediction-focused use cases?
+The same business decision can involve all three questions. A model that predicts shoppers accurately does not establish the effect of a promotion.
+
+## Supervised and Unsupervised Learning
+
+Statistical modeling and machine learning overlap. The outcome and purpose determine the task, not the package we use.
+
+| Task | Example | Model examples |
+|---|---|---|
+| Regression | Predict customer spending, a continuous outcome | Linear regression, regression tree |
+| Classification | Predict a known customer category | Logistic regression, classification tree |
+| Unsupervised learning | Discover groups without a supplied outcome label | K-means, topic models |
+
+Classification can involve two or more categories. Our Roomba example has three; the binary logistic regression used previously has two.
+
+## The Predictive Workflow Across This Unit
+
+- **Engineer:** prepare predictors and package them with a model in a workflow (14).
+- **Fit:** specify the model type, engine, and mode, then learn from training data (14).
+- **Tune:** compare hyperparameters using validation data within the training set (15).
+- **Evaluate:** assess generalization, keeping final test data separate from model selection (15).
+- **Apply:** classify new customers (14-15), or discover and describe customer groups and review topics (16-17).
+
+The unsupervised tasks adapt this workflow: without known outcome labels, accuracy is not their evaluation criterion.
 
 ## Import Data
 
@@ -64,7 +98,11 @@ roomba_survey |>
 
 ## Outcome Variable
 
-Going forward, we will perform feature engineering on our **outcome** variable first. In other words, we pre-process our outcome variable first, then split and pre-process our training and testing data.
+First define our **outcome** using the survey's existing response codes. This fixed recoding does not learn from the data. After splitting, learn any data-dependent preprocessing from training data only.
+
+Lecture 13's `if` / `else if` / `else` statements select a branch for one condition. Here `case_when()` expresses a set of conditions across all rows to create our three outcome labels.
+
+## Recode the Outcome
 
 ```{r}
 # Wrangle S1 into segment.
@@ -102,7 +140,7 @@ When using the `strata` argument, the splitting proportion is applied to each st
 
 ## Decision Trees
 
-We might be tempted to use a logistic regression since this is a classification model, but why wouldn't it work for this outcome?
+The binary logistic regression we used previously does not directly handle three outcome categories. Multinomial logistic regression is an option, but today we will use a different model family.
 
 Let's use a **decision tree**.
 
@@ -136,7 +174,7 @@ Let's use a **decision tree**.
 
 ---
 
-Set the model, engine, and *mode* (since a decision tree can do regression or classification).
+Lecture 13 distinguished the **model type** (decision tree), **engine** (the implementation, `rpart`), and **mode** (classification here, rather than regression). A tree can serve either task.
 
 ```{r}
 # Set the model, engine, and mode.
@@ -214,9 +252,23 @@ wf_fit_01 |>
   conf_mat(truth = segment, estimate = .pred_class)
 ```
 
+## Apply | Predict a New Customer's Segment
+
+Lecture 13's **apply** stage uses the fitted model on new observations with the same predictor meanings and preparation as the training data.
+
+- Testing data have known outcomes, so we can measure accuracy and inspect mistakes.
+- New customer records may not yet have known outcomes; the workflow returns predicted segments.
+- A prediction describes the customer under the recorded inputs. Changing a survey answer in a hypothetical row does not establish what an intervention would cause.
+
+Trees provide readable decision rules; other predictive models are harder to interpret. Neither readability nor accuracy makes those rules causal.
+
 ## Feature Engineering
 
 Let's try to improve our predictions. What if we included some demographic predictors instead? We'll still want to dummy code them. Let's build a recipe that pre-processes our categorical variables.
+
+**Feature engineering** is preprocessing for a modeling purpose. It allows flexible representations, but not "anything goes": exclude inputs that reveal the outcome or will be unavailable at prediction time, and evaluate choices on validation data.
+
+## Put Feature Engineering into a Recipe
 
 ```{r}
 # Build a recipe.
@@ -332,6 +384,14 @@ wf_fit_03 |>
   conf_mat(truth = segment, estimate = .pred_class)
 ```
 
+## Fitted Values Versus Hyperparameters
+
+When we **fit** (train or estimate) a tree, the algorithm learns split variables, cutoffs, and predictions for its terminal nodes from the data.
+
+**Hyperparameters** control how that learning happens. For example, tree depth limits the number of successive splits; it is not a regression coefficient estimated by fitting one tree.
+
+Lecture 13 introduced **tuning** as comparing these settings. Deeper trees may fit training data better while learning noise, so training accuracy alone cannot choose the setting.
+
 ## Notes on Growing (Training/Fitting) a Decision Tree
 
 Workflows help with the fact that we're iterating on a lot of models as we try different predictors and changes to feature engineering. One of the *new* aspects of our models that we'll tweak are called *hyperparameters*. Think of these as model characteristics that determine how the model fits the data. For decision trees we have
@@ -341,7 +401,7 @@ Workflows help with the fact that we're iterating on a lot of models as we try d
 
 ---
 
-We can specify model parameters when we define the model.
+We can specify hyperparameters when we define the model.
 
 ```{r}
 # Specify the model, engine, and mode.
@@ -391,6 +451,25 @@ wf_fit_03 |>
   conf_mat(truth = segment, estimate = .pred_class)
 ```
 
+## From Model Comparisons to Validation
+
+We have reused the held-out data while comparing predictors and tree settings. Once those results guide our choices, the data are serving as **validation data**, not an untouched final test.
+
+Lecture 15 will use cross-validation within the training set for these comparisons and reserve the test set for the final assessment.
+
+The goal is to learn repeatable patterns, not to win on one particular split.
+
+## Causality, Conviction, and Respect
+
+Lecture 13 introduced causal-inference researcher Judea Pearl and his response to the murder of his son Daniel: helping establish the Daniel Pearl Foundation to promote cross-cultural understanding and reconciliation.
+
+The accompanying reflection held two ideas together: we can remain firm in our gospel beliefs while loving and respecting people who believe differently.
+
+- **3 Nephi 12:19:** blessed are the peacemakers.
+- **Matthew 5:43-44:** love your enemies and pray for those who persecute you.
+
+As we question explanations and evaluate competing models, how can we challenge a claim while treating the person making it with respect?
+
 ## Wrapping Up
 
 *Summary*
@@ -399,6 +478,7 @@ wf_fit_03 |>
 - Discussed decision trees.
 - Walked through building, using, and updating workflows.
 - Tried a *little* hyperparameter tuning.
+- Connected lecture 13's predictive workflow to supervised learning, usable features, and predictions for new customers.
 
 *Next Time*
 
